@@ -230,9 +230,9 @@ def sincronizar():
         
         # Procesar cada tienda
         for idx_tienda, tienda in enumerate(tiendas, 1):
-            store_id = tienda['id']
+            store_id = tienda['id_store']
             store_name = tienda['name']
-            products_url = tienda['url']
+            products_url = tienda['productos_json_url']
             
             print("=" * 70)
             print(f"🏪 [{idx_tienda}/{len(tiendas)}] TIENDA: {store_name} (ID: {store_id})")
