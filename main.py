@@ -1,23 +1,31 @@
 import os
+import time
 import requests
 import psycopg2
-import re
 from openai import OpenAI
 
-# 1. Función para cargar el .env de Easypanel manualmente
-def get_env_var(name):
-    value = os.getenv(name)
-    if not value and os.path.exists(".env"):
-        with open(".env", "r") as f:
-            for line in f:
-                if line.startswith(f"{name}="):
-                    return line.strip().split("=", 1)[1].replace('"', '').replace("'", "")
-    return value
+def conseguir_llave():
+    # Intento 1: Variable de entorno directa
+    llave = os.getenv("OPENAI_API_KEY")
+    if llave:
+        return llave.strip()
 
-# 2. Configuración de credenciales
-api_key = get_env_var("OPENAI_API_KEY")
+    # Intento 2: Esperar y leer el archivo .env manualmente
+    # A veces el contenedor tarda un poco en escribir el archivo
+    for _ in range(3): 
+        if os.path.exists(".env"):
+            with open(".env", "r") as f:
+                for line in f:
+                    if "OPENAI_API_KEY" in line:
+                        return line.split("=")[1].replace('"', '').replace("'", "").strip()
+        time.sleep(1) # Espera 1 segundo y reintenta
+    return None
+
+api_key = conseguir_llave()
+
 if not api_key:
-    raise ValueError("No se encontró OPENAI_API_KEY")
+    # Si todo falla, el bot se detendrá aquí con un mensaje claro
+    raise ValueError("ERROR FATAL: No se detectó la OPENAI_API_KEY. Revisa la pestaña Entorno en Easypanel.")
 
 client = OpenAI(api_key=api_key)
 
