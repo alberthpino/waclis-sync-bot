@@ -31,7 +31,7 @@ for key, value in DB_PARAMS.items():
         raise ValueError(f"ERROR: {key} no encontrado en variables de entorno")
 
 # URLs
-STORES_URL = "https://nextiendas.com/stores/waclis/products"
+STORES_URL = "https://entornoqa.com.ar/apisgenerales/tiendas-activas-suscripcion-wia?token=c29390ba52d8d24931adf4654772341a"
 
 def limpiar_html(raw_html):
     """Elimina etiquetas HTML y limpia el texto"""
