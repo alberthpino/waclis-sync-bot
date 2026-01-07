@@ -3,19 +3,30 @@ import requests
 import psycopg2
 import re
 from openai import OpenAI
-from dotenv import load_dotenv # Nueva línea
 
-# Carga las variables del archivo .env si existe
-load_dotenv() 
+# 1. Función para cargar el .env de Easypanel manualmente
+def get_env_var(name):
+    value = os.getenv(name)
+    if not value and os.path.exists(".env"):
+        with open(".env", "r") as f:
+            for line in f:
+                if line.startswith(f"{name}="):
+                    return line.strip().split("=", 1)[1].replace('"', '').replace("'", "")
+    return value
 
-# client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-client = OpenAI(api_key="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")
+# 2. Configuración de credenciales
+api_key = get_env_var("OPENAI_API_KEY")
+if not api_key:
+    raise ValueError("No se encontró OPENAI_API_KEY")
+
+client = OpenAI(api_key=api_key)
+
 DB_PARAMS = {
-    "dbname": os.getenv("DB_NAME"),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASS"),
-    "host": os.getenv("DB_HOST"), # Aquí irá: waclis_waclis-db
-    "port": os.getenv("DB_PORT")
+    "dbname": get_env_var("DB_NAME"),
+    "user": get_env_var("DB_USER"),
+    "password": get_env_var("DB_PASS"),
+    "host": get_env_var("DB_HOST"),
+    "port": get_env_var("DB_PORT") or "5432"
 }
 
 def limpiar_html(raw_html):
