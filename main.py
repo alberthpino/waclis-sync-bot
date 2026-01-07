@@ -3,8 +3,11 @@ import requests
 import psycopg2
 import re
 from openai import OpenAI
+from dotenv import load_dotenv # Nueva línea
 
-# 1. Configuración vía Variables de Entorno
+# Carga las variables del archivo .env si existe
+load_dotenv() 
+
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 DB_PARAMS = {
     "dbname": os.getenv("DB_NAME"),
