@@ -8,7 +8,8 @@ from dotenv import load_dotenv # Nueva línea
 # Carga las variables del archivo .env si existe
 load_dotenv() 
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(api_key="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")
 DB_PARAMS = {
     "dbname": os.getenv("DB_NAME"),
     "user": os.getenv("DB_USER"),
