@@ -5,10 +5,10 @@ import time
 import requests
 import psycopg2
 from openai import OpenAI
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 
 # Cargar variables de entorno
-load_dotenv()
+# load_dotenv()
 
 # Configuración
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
