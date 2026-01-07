@@ -1,8 +1,16 @@
 import os
+import re
 import time
 import requests
 import psycopg2
 from openai import OpenAI
+
+def get_env_var(key):
+    """Obtiene una variable de entorno y lanza error si no existe"""
+    value = os.getenv(key)
+    if not value:
+        raise ValueError(f"ERROR: Variable de entorno {key} no encontrada")
+    return value.strip()
 
 def conseguir_llave():
     # Intento 1: Variable de entorno directa
@@ -14,31 +22,31 @@ def conseguir_llave():
     if os.path.exists(".env"):
         with open(".env", "r") as f:
             for line in f:
-                # Solo procesar si la línea tiene un '=' y contiene la clave
                 if "=" in line and "OPENAI_API_KEY" in line:
                     parts = line.split("=", 1)
                     if len(parts) > 1:
                         return parts[1].replace('"', '').replace("'", "").strip()
     return None
 
+# Verificar API key primero
 api_key = conseguir_llave()
-
 if not api_key:
-    # Si todo falla, el bot se detendrá aquí con un mensaje claro
     raise ValueError("ERROR FATAL: No se detectó la OPENAI_API_KEY. Revisa la pestaña Entorno en Easypanel.")
 
 client = OpenAI(api_key=api_key)
 
+# Configuración de base de datos
 DB_PARAMS = {
     "dbname": get_env_var("DB_NAME"),
     "user": get_env_var("DB_USER"),
     "password": get_env_var("DB_PASS"),
     "host": get_env_var("DB_HOST"),
-    "port": get_env_var("DB_PORT") or "5432"
+    "port": os.getenv("DB_PORT", "5432")  # Valor por defecto si no existe
 }
 
 def limpiar_html(raw_html):
-    if not raw_html: return ""
+    if not raw_html: 
+        return ""
     cleanr = re.compile('<.*?>')
     return re.sub(cleanr, '', raw_html).replace('&nbsp;', ' ').strip()
 
@@ -87,6 +95,7 @@ def procesar():
         print("Sincronización finalizada con éxito.")
     except Exception as e:
         print(f"Error: {e}")
+        raise  # Re-lanzar el error para debugging
 
 if __name__ == "__main__":
     procesar()
