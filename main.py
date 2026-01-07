@@ -1,3 +1,7 @@
+print("Variables de entorno disponibles:")
+print(f"OPENAI_API_KEY existe: {bool(os.getenv('OPENAI_API_KEY'))}")
+print(f"DB_NAME: {os.getenv('DB_NAME')}"
+
 import os
 import re
 import time
