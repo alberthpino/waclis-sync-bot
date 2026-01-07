@@ -10,15 +10,15 @@ def conseguir_llave():
     if llave:
         return llave.strip()
 
-    # Intento 2: Esperar y leer el archivo .env manualmente
-    # A veces el contenedor tarda un poco en escribir el archivo
-    for _ in range(3): 
-        if os.path.exists(".env"):
-            with open(".env", "r") as f:
-                for line in f:
-                    if "OPENAI_API_KEY" in line:
-                        return line.split("=")[1].replace('"', '').replace("'", "").strip()
-        time.sleep(1) # Espera 1 segundo y reintenta
+    # Intento 2: Leer el archivo .env manualmente
+    if os.path.exists(".env"):
+        with open(".env", "r") as f:
+            for line in f:
+                # Solo procesar si la línea tiene un '=' y contiene la clave
+                if "=" in line and "OPENAI_API_KEY" in line:
+                    parts = line.split("=", 1)
+                    if len(parts) > 1:
+                        return parts[1].replace('"', '').replace("'", "").strip()
     return None
 
 api_key = conseguir_llave()
