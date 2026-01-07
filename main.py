@@ -1,13 +1,16 @@
-print("Variables de entorno disponibles:")
-print(f"OPENAI_API_KEY existe: {bool(os.getenv('OPENAI_API_KEY'))}")
-print(f"DB_NAME: {os.getenv('DB_NAME')}"
-
 import os
 import re
 import time
 import requests
 import psycopg2
 from openai import OpenAI
+
+# DEBUG: Ver qué variables están disponibles
+print("=== DEBUG: Variables de entorno ===")
+print(f"OPENAI_API_KEY existe: {bool(os.getenv('OPENAI_API_KEY'))}")
+print(f"DB_NAME: {os.getenv('DB_NAME')}")
+print(f"DB_HOST: {os.getenv('DB_HOST')}")
+print("===================================")
 
 def get_env_var(key):
     """Obtiene una variable de entorno y lanza error si no existe"""
