@@ -144,6 +144,85 @@ def crear_texto_para_embedding(producto):
     
     return '\n'.join(texto_partes)
 
+def crear_answer_legible(producto):
+    """Crea un texto legible y estructurado para el campo answer"""
+    
+    # Información básica
+    answer_partes = [
+        f"📦 INFORMACIÓN DEL PRODUCTO",
+        f"",
+        f"Nombre: {producto.get('name', 'Sin nombre')}",
+        f"SKU: {producto.get('sku', 'N/A')}",
+        f"ID Producto: {producto.get('id')}",
+        f"",
+        f"💰 PRECIO Y STOCK",
+        f"Precio: ${producto.get('price', 0)} {producto.get('currency', 'ARS')}",
+        f"Stock Total: {producto.get('stock', 0)} unidades",
+    ]
+    
+    # Descripción
+    desc = limpiar_html(producto.get('description', ''))
+    if desc:
+        answer_partes.extend([
+            f"",
+            f"📝 DESCRIPCIÓN",
+            desc
+        ])
+    
+    # Categorías
+    categorias = producto.get('categories', [])
+    if categorias:
+        cats = ', '.join(set([cat['name'] for cat in categorias]))
+        answer_partes.extend([
+            f"",
+            f"🏷️ CATEGORÍAS",
+            cats
+        ])
+    
+    # Variantes
+    variantes = producto.get('variants', [])
+    if variantes:
+        answer_partes.extend([
+            f"",
+            f"🎨 VARIANTES DISPONIBLES ({len(variantes)})"
+        ])
+        for i, var in enumerate(variantes, 1):
+            attrs = var.get('attributes', [])
+            color = next((a['value'] for a in attrs if a['name'] == 'Color'), 'Sin especificar')
+            answer_partes.append(
+                f"  {i}. {color} - Stock: {var.get('stock', 0)} unid - Precio: ${var.get('price', 0)}"
+            )
+    
+    # Info adicional
+    min_qty = producto.get('minimum_recommended_quantity')
+    prod_days = producto.get('production_days')
+    peso = producto.get('weight')
+    dims = producto.get('dimensions', {})
+    
+    if any([min_qty, prod_days, peso, dims.get('length')]):
+        answer_partes.extend([f"", f"ℹ️ INFORMACIÓN ADICIONAL"])
+        if min_qty:
+            answer_partes.append(f"Cantidad mínima recomendada: {min_qty}")
+        if prod_days:
+            answer_partes.append(f"Días de producción: {prod_days}")
+        if peso:
+            answer_partes.append(f"Peso: {peso}g")
+        if dims.get('length'):
+            answer_partes.append(
+                f"Dimensiones: {dims.get('length', 0)} x {dims.get('width', 0)} x {dims.get('height', 0)} cm"
+            )
+    
+    # Imágenes
+    gallery = producto.get('gallery', [])
+    if gallery:
+        answer_partes.extend([
+            f"",
+            f"🖼️ IMÁGENES",
+            f"Total de imágenes: {len(gallery)}"
+        ])
+    
+    return '\n'.join(answer_partes)
+
 def upsert_producto(cursor, producto, store_id):
     """Inserta o actualiza un producto en captain_assistant_responses"""
     product_id = str(producto['id'])
@@ -159,7 +238,8 @@ def upsert_producto(cursor, producto, store_id):
             print(f"  ❌ Fallo en embedding para: {product_name[:40]}")
             return False
         
-        answer_json = json.dumps(producto, ensure_ascii=False)
+        # answer_json = json.dumps(producto, ensure_ascii=False)
+        answer_legible = crear_answer_legible(producto)
         question = f"{producto.get('sku', '')} - {producto.get('id')} - {producto.get('name', '')}"
 
         cursor.execute(
