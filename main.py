@@ -258,14 +258,14 @@ def upsert_producto(cursor, producto, store_id):
                     updated_at = NOW() 
                 WHERE product_id = %s
             """
-            cursor.execute(query, (question, answer_json, vector, str(store_id), product_id))
+            cursor.execute(query, (question, answer_legible, vector, str(store_id), product_id))
         else:
             query = """
                 INSERT INTO captain_assistant_responses 
                 (question, answer, embedding, assistant_id, account_id, product_id, store_id, status, documentable_type, created_at, updated_at) 
                 VALUES (%s, %s, %s, 2, 1, %s, %s, 1, 'User', NOW(), NOW())
             """
-            cursor.execute(query, (question, answer_json, vector, product_id, str(store_id)))
+            cursor.execute(query, (question, answer_legible, vector, product_id, str(store_id)))
             print(f"  ➕ Insertado: {product_name[:50]}")
         
         return True
