@@ -159,38 +159,6 @@ def upsert_producto(cursor, producto, store_id):
             print(f"  ❌ Fallo en embedding para: {product_name[:40]}")
             return False
         
-        # Guardar JSON completo como content
-        content_json = json.dumps(producto, ensure_ascii=False)
-        
-        # Verificar si el producto ya existe
-        cursor.execute(
-            "SELECT id FROM captain_assistant_responses WHERE product_id = %s",
-            (product_id,)
-        )
-        existe = cursor.fetchone()
-
-        if existe:
-            # UPDATE
-            query = """
-                UPDATE captain_assistant_responses 
-                SET content = %s, 
-                    content_vector = %s, 
-                    store_id = %s,
-                    updated_at = NOW() 
-                WHERE product_id = %s
-            """
-            cursor.execute(query, (content_json, vector, str(store_id), product_id))
-        else:
-            # INSERT
-            query = """
-                INSERT INTO captain_assistant_responses 
-                (content, assistant_id, account_id, content_vector, product_id, store_id, created_at, updated_at) 
-                VALUES (%s, 1, 1, %s, %s, %s, NOW(), NOW())
-            """
-            cursor.execute(query, (content_json, vector, product_id, str(store_id)))
-
-
-        # DESPUÉS:
         answer_json = json.dumps(producto, ensure_ascii=False)
         question = f"{producto.get('sku', '')} - {producto.get('id')} - {producto.get('name', '')}"
 
