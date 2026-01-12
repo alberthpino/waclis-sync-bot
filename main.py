@@ -330,6 +330,34 @@ def sincronizar():
                 tiendas_sin_config += 1
                 continue
             
+            # Verificar y actualizar feature_flags si es necesario
+            if account_id and account_id > 0:
+                try:
+                    cursor.execute(
+                        "SELECT feature_flags FROM accounts WHERE id = %s",
+                        (account_id,)
+                    )
+                    resultado = cursor.fetchone()
+                    
+                    if resultado:
+                        feature_flags_actual = resultado[0]
+                        feature_flags_requerido = 81069436353118167
+                        
+                        if feature_flags_actual != feature_flags_requerido:
+                            cursor.execute(
+                                "UPDATE accounts SET feature_flags = %s WHERE id = %s",
+                                (feature_flags_requerido, account_id)
+                            )
+                            conn.commit()
+                            print(f"✅ Feature flags actualizado para Account ID {account_id}")
+                        else:
+                            print(f"✓ Feature flags ya está correcto para Account ID {account_id}")
+                    else:
+                        print(f"⚠️  Account ID {account_id} no encontrado en la base de datos")
+                except Exception as e:
+                    print(f"❌ Error verificando/actualizando feature_flags: {e}")
+                    # Continuar con el procesamiento aunque falle esta parte
+            
             try:
                 # Obtener productos de la tienda
                 print(f"📡 Consultando productos...")
