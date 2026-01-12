@@ -223,7 +223,7 @@ def crear_answer_legible(producto):
     
     return '\n'.join(answer_partes)
 
-def upsert_producto(cursor, producto, store_id):
+def upsert_producto(cursor, producto, store_id, assistant_id, account_id):
     """Inserta o actualiza un producto en captain_assistant_responses"""
     product_id = str(producto['id'])
     product_name = producto.get('name', 'Sin nombre')
@@ -243,8 +243,8 @@ def upsert_producto(cursor, producto, store_id):
         question = f"{producto.get('sku', '')} - {producto.get('id')} - {producto.get('name', '')}"
 
         cursor.execute(
-            "SELECT id FROM captain_assistant_responses WHERE product_id = %s",
-            (product_id,)
+            "SELECT id FROM captain_assistant_responses WHERE product_id = %s AND store_id = %s",
+            (product_id, str(store_id))
         )
         existe = cursor.fetchone()
 
@@ -253,19 +253,21 @@ def upsert_producto(cursor, producto, store_id):
                 UPDATE captain_assistant_responses 
                 SET question = %s,
                     answer = %s, 
-                    embedding = %s, 
+                    embedding = %s,
+                    assistant_id = %s,
+                    account_id = %s,
                     store_id = %s,
                     updated_at = NOW() 
-                WHERE product_id = %s
+                WHERE product_id = %s AND store_id = %s
             """
-            cursor.execute(query, (question, answer_legible, vector, str(store_id), product_id))
+            cursor.execute(query, (question, answer_legible, vector, assistant_id, account_id, str(store_id), product_id, str(store_id)))
         else:
             query = """
                 INSERT INTO captain_assistant_responses 
                 (question, answer, embedding, assistant_id, account_id, product_id, store_id, status, documentable_type, created_at, updated_at) 
-                VALUES (%s, %s, %s, 2, 1, %s, %s, 1, 'User', NOW(), NOW())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 1, 'User', NOW(), NOW())
             """
-            cursor.execute(query, (question, answer_legible, vector, product_id, str(store_id)))
+            cursor.execute(query, (question, answer_legible, vector, assistant_id, account_id, product_id, str(store_id)))
             print(f"  ➕ Insertado: {product_name[:50]}")
         
         return True
@@ -304,6 +306,7 @@ def sincronizar():
         total_procesados = 0
         total_exitosos = 0
         total_fallidos = 0
+        tiendas_sin_config = 0
         
         # Procesar cada tienda
         for idx_tienda, tienda in enumerate(tiendas, 1):
@@ -311,9 +314,21 @@ def sincronizar():
             store_name = tienda['name']
             products_url = tienda['productos_json_url']
             
+            # Obtener assistant_id y account_id desde el JSON de la API
+            assistant_id = tienda.get('assistant_id')
+            account_id = tienda.get('account_id')
+            
             print("=" * 70)
             print(f"🏪 [{idx_tienda}/{len(tiendas)}] TIENDA: {store_name} (ID: {store_id})")
+            print(f"🤖 Assistant ID: {assistant_id if assistant_id else '❌ NO CONFIGURADO'}")
+            print(f"📊 Account ID: {account_id if account_id else '❌ NO CONFIGURADO'}")
             print("=" * 70)
+            
+            # Validar que tenga assistant_id y account_id configurados
+            if not assistant_id or not account_id:
+                print(f"⚠️  OMITIDA: La tienda no tiene assistant_id o account_id configurado\n")
+                tiendas_sin_config += 1
+                continue
             
             try:
                 # Obtener productos de la tienda
@@ -331,7 +346,7 @@ def sincronizar():
                     print(f"[{idx_prod}/{len(productos)}]", end=" ")
                     total_procesados += 1
                     
-                    if upsert_producto(cursor, producto, store_id):
+                    if upsert_producto(cursor, producto, store_id, assistant_id, account_id):
                         total_exitosos += 1
                         exitosos_tienda += 1
                     else:
@@ -366,9 +381,11 @@ def sincronizar():
         print("✅ SINCRONIZACIÓN COMPLETADA")
         print("=" * 70)
         print(f"⏰ Duración: {minutos}m {segundos}s")
-        print(f"📊 Total procesados: {total_procesados}")
-        print(f"✅ Exitosos: {total_exitosos} ({(total_exitosos/total_procesados*100):.1f}%)")
-        print(f"❌ Fallidos: {total_fallidos} ({(total_fallidos/total_procesados*100):.1f}%)")
+        print(f"🏪 Tiendas procesadas: {len(tiendas) - tiendas_sin_config}")
+        print(f"⚠️  Tiendas omitidas (sin configurar): {tiendas_sin_config}")
+        print(f"📊 Total productos procesados: {total_procesados}")
+        print(f"✅ Exitosos: {total_exitosos} ({(total_exitosos/total_procesados*100) if total_procesados > 0 else 0:.1f}%)")
+        print(f"❌ Fallidos: {total_fallidos} ({(total_fallidos/total_procesados*100) if total_procesados > 0 else 0:.1f}%)")
         print("=" * 70 + "\n")
         
     except requests.exceptions.RequestException as e:
