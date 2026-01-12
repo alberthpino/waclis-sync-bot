@@ -398,7 +398,7 @@ def sincronizar():
                 try:
                     print(f"🔍 Verificando productos obsoletos...")
                     
-                    # Obtener todos los product_ids actuales en la BD para esta tienda
+                    # Obtener todos los product_ids actuales en la BD para esta tienda y account
                     cursor.execute(
                         "SELECT product_id FROM captain_assistant_responses WHERE store_id = %s AND account_id = %s",
                         (str(store_id), account_id)
@@ -406,21 +406,34 @@ def sincronizar():
                     productos_bd = cursor.fetchall()
                     ids_productos_bd = set(row[0] for row in productos_bd)
                     
+                    # Debug: mostrar información
+                    print(f"📊 Productos en JSON: {len(ids_productos_json)}")
+                    print(f"📊 Productos en BD: {len(ids_productos_bd)}")
+                    
                     # Encontrar IDs que están en BD pero NO en el JSON (productos eliminados)
                     ids_a_eliminar = ids_productos_bd - ids_productos_json
                     
                     if ids_a_eliminar:
-                        print(f"🗑️  Eliminando {len(ids_a_eliminar)} productos obsoletos...")
+                        print(f"🗑️  Productos a eliminar: {len(ids_a_eliminar)}")
+                        print(f"⚠️  Ejemplos de IDs a eliminar: {list(ids_a_eliminar)[:5]}")
                         
-                        # Eliminar productos obsoletos
-                        for product_id in ids_a_eliminar:
-                            cursor.execute(
-                                "DELETE FROM captain_assistant_responses WHERE product_id = %s AND store_id = %s AND account_id = %s",
-                                (product_id, str(store_id), account_id)
-                            )
+                        # Verificación de seguridad: si va a eliminar más del 80%, pedir confirmación
+                        porcentaje_eliminacion = (len(ids_a_eliminar) / len(ids_productos_bd) * 100) if ids_productos_bd else 0
                         
-                        conn.commit()
-                        print(f"✅ {len(ids_a_eliminar)} productos obsoletos eliminados")
+                        if porcentaje_eliminacion > 80:
+                            print(f"⚠️⚠️⚠️  ADVERTENCIA: Se va a eliminar {porcentaje_eliminacion:.1f}% de los productos")
+                            print(f"⚠️⚠️⚠️  Esto parece inusual. Eliminación cancelada por seguridad.")
+                            print(f"⚠️⚠️⚠️  Verifica que el JSON de productos sea correcto.")
+                        else:
+                            # Eliminar productos obsoletos
+                            for product_id in ids_a_eliminar:
+                                cursor.execute(
+                                    "DELETE FROM captain_assistant_responses WHERE product_id = %s AND store_id = %s AND account_id = %s",
+                                    (product_id, str(store_id), account_id)
+                                )
+                            
+                            conn.commit()
+                            print(f"✅ {len(ids_a_eliminar)} productos obsoletos eliminados ({porcentaje_eliminacion:.1f}%)")
                     else:
                         print(f"✓ No hay productos obsoletos para eliminar")
                         
