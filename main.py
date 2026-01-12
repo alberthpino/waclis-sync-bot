@@ -369,10 +369,30 @@ def sincronizar():
                 exitosos_tienda = 0
                 fallidos_tienda = 0
                 
+                # IMPORTANTE: Obtener IDs de productos ANTES de procesar (estado actual en BD)
+                print(f"📋 Consultando estado actual en BD antes de actualizar...")
+                cursor.execute(
+                    "SELECT product_id FROM captain_assistant_responses WHERE store_id = %s AND account_id = %s",
+                    (str(store_id), account_id)
+                )
+                productos_bd_antes = cursor.fetchall()
+                ids_productos_bd_antes = set(row[0] for row in productos_bd_antes)
+                print(f"📊 Productos actuales en BD (antes): {len(ids_productos_bd_antes)}")
+                
                 # Crear lista de IDs de productos actuales en el JSON
                 ids_productos_json = set(str(producto['id']) for producto in productos)
+                print(f"📊 Productos en JSON actual: {len(ids_productos_json)}")
                 
-                # Procesar cada producto
+                # Calcular qué se eliminará (ANTES de procesar)
+                ids_a_eliminar = ids_productos_bd_antes - ids_productos_json
+                print(f"🗑️  Productos que serán eliminados: {len(ids_a_eliminar)}")
+                if ids_a_eliminar and len(ids_a_eliminar) <= 10:
+                    print(f"    IDs a eliminar: {list(ids_a_eliminar)}")
+                elif ids_a_eliminar:
+                    print(f"    Ejemplos: {list(ids_a_eliminar)[:10]}")
+                
+                # Procesar cada producto (INSERT/UPDATE)
+                print(f"\n🔄 Procesando productos del JSON...\n")
                 for idx_prod, producto in enumerate(productos, 1):
                     print(f"[{idx_prod}/{len(productos)}]", end=" ")
                     total_procesados += 1
@@ -389,57 +409,65 @@ def sincronizar():
                         conn.commit()
                         print(f"  💾 Guardado intermedio ({idx_prod}/{len(productos)})")
                 
-                # Commit final de la tienda
+                # Commit final de inserts/updates
                 conn.commit()
                 
-                print(f"\n✅ Tienda completada: {exitosos_tienda} exitosos, {fallidos_tienda} fallidos")
+                print(f"\n✅ Procesamiento completado: {exitosos_tienda} exitosos, {fallidos_tienda} fallidos")
                 
-                # Eliminar productos que ya no están en el JSON
-                try:
-                    print(f"🔍 Verificando productos obsoletos...")
+                # Eliminar productos obsoletos (los que NO están en el JSON)
+                if ids_a_eliminar:
+                    print(f"\n🗑️  Iniciando eliminación de productos obsoletos...")
                     
-                    # Obtener todos los product_ids actuales en la BD para esta tienda y account
-                    cursor.execute(
-                        "SELECT product_id FROM captain_assistant_responses WHERE store_id = %s AND account_id = %s",
-                        (str(store_id), account_id)
-                    )
-                    productos_bd = cursor.fetchall()
-                    ids_productos_bd = set(row[0] for row in productos_bd)
+                    # Verificación de seguridad: si va a eliminar más del 80%, cancelar
+                    porcentaje_eliminacion = (len(ids_a_eliminar) / len(ids_productos_bd_antes) * 100) if ids_productos_bd_antes else 0
                     
-                    # Debug: mostrar información
-                    print(f"📊 Productos en JSON: {len(ids_productos_json)}")
-                    print(f"📊 Productos en BD: {len(ids_productos_bd)}")
-                    
-                    # Encontrar IDs que están en BD pero NO en el JSON (productos eliminados)
-                    ids_a_eliminar = ids_productos_bd - ids_productos_json
-                    
-                    if ids_a_eliminar:
-                        print(f"🗑️  Productos a eliminar: {len(ids_a_eliminar)}")
-                        print(f"⚠️  Ejemplos de IDs a eliminar: {list(ids_a_eliminar)[:5]}")
-                        
-                        # Verificación de seguridad: si va a eliminar más del 80%, pedir confirmación
-                        porcentaje_eliminacion = (len(ids_a_eliminar) / len(ids_productos_bd) * 100) if ids_productos_bd else 0
-                        
-                        if porcentaje_eliminacion > 80:
-                            print(f"⚠️⚠️⚠️  ADVERTENCIA: Se va a eliminar {porcentaje_eliminacion:.1f}% de los productos")
-                            print(f"⚠️⚠️⚠️  Esto parece inusual. Eliminación cancelada por seguridad.")
-                            print(f"⚠️⚠️⚠️  Verifica que el JSON de productos sea correcto.")
-                        else:
-                            # Eliminar productos obsoletos
+                    if porcentaje_eliminacion > 80:
+                        print(f"⚠️⚠️⚠️  ADVERTENCIA: Se va a eliminar {porcentaje_eliminacion:.1f}% de los productos")
+                        print(f"⚠️⚠️⚠️  Esto parece inusual. Eliminación cancelada por seguridad.")
+                        print(f"⚠️⚠️⚠️  Verifica que el JSON de productos sea correcto.")
+                    else:
+                        try:
+                            eliminados_count = 0
                             for product_id in ids_a_eliminar:
                                 cursor.execute(
                                     "DELETE FROM captain_assistant_responses WHERE product_id = %s AND store_id = %s AND account_id = %s",
                                     (product_id, str(store_id), account_id)
                                 )
+                                eliminados_count += 1
                             
                             conn.commit()
-                            print(f"✅ {len(ids_a_eliminar)} productos obsoletos eliminados ({porcentaje_eliminacion:.1f}%)")
-                    else:
-                        print(f"✓ No hay productos obsoletos para eliminar")
-                        
-                except Exception as e:
-                    print(f"❌ Error al eliminar productos obsoletos: {e}")
-                    conn.rollback()
+                            print(f"✅ {eliminados_count} productos obsoletos eliminados ({porcentaje_eliminacion:.1f}%)")
+                            
+                            # Verificar estado final
+                            cursor.execute(
+                                "SELECT COUNT(*) FROM captain_assistant_responses WHERE store_id = %s AND account_id = %s",
+                                (str(store_id), account_id)
+                            )
+                            total_final = cursor.fetchone()[0]
+                            print(f"📊 Total final en BD para esta tienda: {total_final} productos")
+                            
+                            # Validación: el total final debe ser igual a los del JSON
+                            if total_final != len(ids_productos_json):
+                                print(f"⚠️⚠️⚠️  ADVERTENCIA: Discrepancia detectada!")
+                                print(f"    Esperado: {len(ids_productos_json)} productos")
+                                print(f"    Encontrado: {total_final} productos")
+                                print(f"    Diferencia: {abs(total_final - len(ids_productos_json))} productos")
+                            else:
+                                print(f"✓ Verificación exitosa: BD sincronizada con JSON")
+                                
+                        except Exception as e:
+                            print(f"❌ Error al eliminar productos obsoletos: {e}")
+                            conn.rollback()
+                else:
+                    print(f"\n✓ No hay productos obsoletos para eliminar")
+                    
+                    # Verificar estado final de todos modos
+                    cursor.execute(
+                        "SELECT COUNT(*) FROM captain_assistant_responses WHERE store_id = %s AND account_id = %s",
+                        (str(store_id), account_id)
+                    )
+                    total_final = cursor.fetchone()[0]
+                    print(f"📊 Total en BD para esta tienda: {total_final} productos")
                 
                 print()  # Línea en blanco
                 
