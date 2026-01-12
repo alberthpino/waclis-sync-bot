@@ -369,6 +369,9 @@ def sincronizar():
                 exitosos_tienda = 0
                 fallidos_tienda = 0
                 
+                # Crear lista de IDs de productos actuales en el JSON
+                ids_productos_json = set(str(producto['id']) for producto in productos)
+                
                 # Procesar cada producto
                 for idx_prod, producto in enumerate(productos, 1):
                     print(f"[{idx_prod}/{len(productos)}]", end=" ")
@@ -389,7 +392,43 @@ def sincronizar():
                 # Commit final de la tienda
                 conn.commit()
                 
-                print(f"\n✅ Tienda completada: {exitosos_tienda} exitosos, {fallidos_tienda} fallidos\n")
+                print(f"\n✅ Tienda completada: {exitosos_tienda} exitosos, {fallidos_tienda} fallidos")
+                
+                # Eliminar productos que ya no están en el JSON
+                try:
+                    print(f"🔍 Verificando productos obsoletos...")
+                    
+                    # Obtener todos los product_ids actuales en la BD para esta tienda
+                    cursor.execute(
+                        "SELECT product_id FROM captain_assistant_responses WHERE store_id = %s AND account_id = %s",
+                        (str(store_id), account_id)
+                    )
+                    productos_bd = cursor.fetchall()
+                    ids_productos_bd = set(row[0] for row in productos_bd)
+                    
+                    # Encontrar IDs que están en BD pero NO en el JSON (productos eliminados)
+                    ids_a_eliminar = ids_productos_bd - ids_productos_json
+                    
+                    if ids_a_eliminar:
+                        print(f"🗑️  Eliminando {len(ids_a_eliminar)} productos obsoletos...")
+                        
+                        # Eliminar productos obsoletos
+                        for product_id in ids_a_eliminar:
+                            cursor.execute(
+                                "DELETE FROM captain_assistant_responses WHERE product_id = %s AND store_id = %s AND account_id = %s",
+                                (product_id, str(store_id), account_id)
+                            )
+                        
+                        conn.commit()
+                        print(f"✅ {len(ids_a_eliminar)} productos obsoletos eliminados")
+                    else:
+                        print(f"✓ No hay productos obsoletos para eliminar")
+                        
+                except Exception as e:
+                    print(f"❌ Error al eliminar productos obsoletos: {e}")
+                    conn.rollback()
+                
+                print()  # Línea en blanco
                 
             except requests.exceptions.RequestException as e:
                 print(f"❌ Error de conexión con tienda {store_name}: {e}\n")
