@@ -35,6 +35,53 @@ for key, value in DB_PARAMS.items():
 # URLs
 STORES_URL = "https://nextiendas.com/apisgenerales/tiendas-activas-suscripcion-wia?token=c29390ba52d8d24931adf4654772341a"
 
+def crear_slug(texto):
+    """Crea un slug URL-friendly a partir de un texto"""
+    if not texto:
+        return ""
+    
+    # Convertir a minúsculas
+    slug = texto.lower()
+    
+    # Reemplazar caracteres especiales y acentos
+    replacements = {
+        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ü': 'u',
+        'ñ': 'n', 'à': 'a', 'è': 'e', 'ì': 'i', 'ò': 'o', 'ù': 'u',
+        'ä': 'a', 'ë': 'e', 'ï': 'i', 'ö': 'o', 'â': 'a', 'ê': 'e',
+        'î': 'i', 'ô': 'o', 'û': 'u', 'ã': 'a', 'õ': 'o', 'ç': 'c'
+    }
+    
+    for old, new in replacements.items():
+        slug = slug.replace(old, new)
+    
+    # Eliminar caracteres no alfanuméricos excepto espacios y guiones
+    slug = re.sub(r'[^a-z0-9\s-]', '', slug)
+    
+    # Reemplazar múltiples espacios o guiones por uno solo
+    slug = re.sub(r'[\s-]+', '-', slug)
+    
+    # Eliminar guiones al inicio y final
+    slug = slug.strip('-')
+    
+    return slug
+
+def generar_product_url(dominio, product_id, product_name):
+    """Genera la URL completa del producto"""
+    # Asegurar que el dominio no termine con /
+    dominio = dominio.rstrip('/')
+    
+    # Crear el slug del nombre del producto
+    slug = crear_slug(product_name)
+    
+    # Si el slug está vacío, usar solo el ID
+    if not slug:
+        slug = f"producto-{product_id}"
+    
+    # Construir la URL
+    product_url = f"{dominio}/productos/{product_id}/{slug}"
+    
+    return product_url
+
 def limpiar_html(raw_html):
     """Elimina etiquetas HTML y limpia el texto"""
     if not raw_html:
@@ -225,7 +272,7 @@ def crear_answer_legible(producto):
     
     return '\n'.join(answer_partes)
 
-def upsert_producto(cursor, producto, store_id, assistant_id, account_id):
+def upsert_producto(cursor, producto, store_id, assistant_id, account_id, dominio):
     """Inserta o actualiza un producto en captain_assistant_responses"""
     product_id = str(producto['id'])
     product_name = producto.get('name', 'Sin nombre')
@@ -243,6 +290,9 @@ def upsert_producto(cursor, producto, store_id, assistant_id, account_id):
         # answer_json = json.dumps(producto, ensure_ascii=False)
         answer_legible = crear_answer_legible(producto)
         question = f"{producto.get('sku', '')} - {producto.get('id')} - {producto.get('name', '')}"
+        
+        # Generar la URL del producto
+        product_url = generar_product_url(dominio, product_id, product_name)
 
         cursor.execute(
             "SELECT id FROM captain_assistant_responses WHERE product_id = %s AND store_id = %s",
@@ -259,17 +309,18 @@ def upsert_producto(cursor, producto, store_id, assistant_id, account_id):
                     assistant_id = %s,
                     account_id = %s,
                     store_id = %s,
+                    product_url = %s,
                     updated_at = NOW() 
                 WHERE product_id = %s AND store_id = %s
             """
-            cursor.execute(query, (question, answer_legible, vector, assistant_id, account_id, str(store_id), product_id, str(store_id)))
+            cursor.execute(query, (question, answer_legible, vector, assistant_id, account_id, str(store_id), product_url, product_id, str(store_id)))
         else:
             query = """
                 INSERT INTO captain_assistant_responses 
-                (question, answer, embedding, assistant_id, account_id, product_id, store_id, status, documentable_type, created_at, updated_at) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 1, 'User', NOW(), NOW())
+                (question, answer, embedding, assistant_id, account_id, product_id, store_id, product_url, status, documentable_type, created_at, updated_at) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 1, 'User', NOW(), NOW())
             """
-            cursor.execute(query, (question, answer_legible, vector, assistant_id, account_id, product_id, str(store_id)))
+            cursor.execute(query, (question, answer_legible, vector, assistant_id, account_id, product_id, str(store_id), product_url))
             print(f"  ➕ Insertado: {product_name[:50]}")
         
         return True
@@ -315,6 +366,7 @@ def sincronizar():
             store_id = tienda['id_store']
             store_name = tienda['name']
             products_url = tienda['productos_json_url']
+            dominio = tienda.get('dominio', '')
             
             # Obtener assistant_id y account_id desde el JSON de la API
             assistant_id = tienda.get('assistant_id')
@@ -322,6 +374,7 @@ def sincronizar():
             
             print("=" * 70)
             print(f"🏪 [{idx_tienda}/{len(tiendas)}] TIENDA: {store_name} (ID: {store_id})")
+            print(f"🌐 Dominio: {dominio}")
             print(f"🤖 Assistant ID: {assistant_id if assistant_id else '❌ NO CONFIGURADO'}")
             print(f"📊 Account ID: {account_id if account_id else '❌ NO CONFIGURADO'}")
             print("=" * 70)
@@ -331,6 +384,10 @@ def sincronizar():
                 print(f"⚠️  OMITIDA: La tienda no tiene assistant_id o account_id configurado\n")
                 tiendas_sin_config += 1
                 continue
+            
+            # Validar que tenga dominio configurado
+            if not dominio:
+                print(f"⚠️  ADVERTENCIA: La tienda no tiene dominio configurado, se omitirá product_url\n")
             
             # Verificar y actualizar feature_flags si es necesario
             if account_id and account_id > 0:
@@ -399,7 +456,7 @@ def sincronizar():
                     print(f"[{idx_prod}/{len(productos)}]", end=" ")
                     total_procesados += 1
                     
-                    if upsert_producto(cursor, producto, store_id, assistant_id, account_id):
+                    if upsert_producto(cursor, producto, store_id, assistant_id, account_id, dominio):
                         total_exitosos += 1
                         exitosos_tienda += 1
                     else:
