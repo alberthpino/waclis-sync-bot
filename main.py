@@ -10,6 +10,8 @@ from openai import OpenAI
 # Cargar variables de entorno
 # load_dotenv()
 
+
+
 # Configuración
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
