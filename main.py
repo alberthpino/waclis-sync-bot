@@ -7,6 +7,7 @@ import psycopg2
 from openai import OpenAI
 # from dotenv import load_dotenv
 
+
 # Cargar variables de entorno
 # load_dotenv()
 
