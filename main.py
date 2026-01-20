@@ -273,13 +273,19 @@ def crear_answer_legible(producto, product_url):
             )
     
     # Imágenes
+    image_principal = producto.get('image')
     gallery = producto.get('gallery', [])
-    if gallery:
-        answer_partes.extend([
-            f"",
-            f"🖼️ IMÁGENES",
-            f"Total de imágenes: {len(gallery)}"
-        ])
+    
+    if image_principal or gallery:
+        answer_partes.extend([f"", f"🖼️ IMÁGENES"])
+        
+        if image_principal:
+            answer_partes.append(f"Imagen principal: {image_principal}")
+        
+        if gallery:
+            answer_partes.append(f"Galería ({len(gallery)} imágenes):")
+            for i, img_url in enumerate(gallery, 1):
+                answer_partes.append(f"  {i}. {img_url}")
     
     return '\n'.join(answer_partes)
 
