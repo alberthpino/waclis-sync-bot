@@ -193,7 +193,7 @@ def crear_texto_para_embedding(producto):
     
     return '\n'.join(texto_partes)
 
-def crear_answer_legible(producto):
+def crear_answer_legible(producto, product_url):
     """Crea un texto legible y estructurado para el campo answer"""
     
     # Información básica
@@ -203,11 +203,22 @@ def crear_answer_legible(producto):
         f"Nombre: {producto.get('name', 'Sin nombre')}",
         f"SKU: {producto.get('sku', 'N/A')}",
         f"ID Producto: {producto.get('id')}",
+    ]
+    
+    # Agregar URL del producto si existe
+    if product_url:
+        answer_partes.extend([
+            f"",
+            f"🔗 VER FICHA DEL PRODUCTO",
+            f"{product_url}"
+        ])
+    
+    answer_partes.extend([
         f"",
         f"💰 PRECIO Y STOCK",
         f"Precio: ${producto.get('price', 0)} {producto.get('currency', 'ARS')}",
         f"Stock Total: {producto.get('stock', 0)} unidades",
-    ]
+    ])
     
     # Descripción
     desc = limpiar_html(producto.get('description', ''))
@@ -287,12 +298,12 @@ def upsert_producto(cursor, producto, store_id, assistant_id, account_id, domini
             print(f"  ❌ Fallo en embedding para: {product_name[:40]}")
             return False
         
-        # answer_json = json.dumps(producto, ensure_ascii=False)
-        answer_legible = crear_answer_legible(producto)
-        question = f"{producto.get('sku', '')} - {producto.get('id')} - {producto.get('name', '')}"
-        
         # Generar la URL del producto
         product_url = generar_product_url(dominio, product_id, product_name)
+        
+        # Crear answer con la URL incluida
+        answer_legible = crear_answer_legible(producto, product_url)
+        question = f"{producto.get('sku', '')} - {producto.get('id')} - {producto.get('name', '')}"
 
         cursor.execute(
             "SELECT id FROM captain_assistant_responses WHERE product_id = %s AND store_id = %s",
