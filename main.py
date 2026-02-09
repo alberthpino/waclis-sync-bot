@@ -40,10 +40,8 @@ def crear_slug(texto):
     if not texto:
         return ""
     
-    # Convertir a minúsculas
     slug = texto.lower()
     
-    # Reemplazar caracteres especiales y acentos
     replacements = {
         'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ü': 'u',
         'ñ': 'n', 'à': 'a', 'è': 'e', 'ì': 'i', 'ò': 'o', 'ù': 'u',
@@ -54,32 +52,21 @@ def crear_slug(texto):
     for old, new in replacements.items():
         slug = slug.replace(old, new)
     
-    # Eliminar caracteres no alfanuméricos excepto espacios y guiones
     slug = re.sub(r'[^a-z0-9\s-]', '', slug)
-    
-    # Reemplazar múltiples espacios o guiones por uno solo
     slug = re.sub(r'[\s-]+', '-', slug)
-    
-    # Eliminar guiones al inicio y final
     slug = slug.strip('-')
     
     return slug
 
 def generar_product_url(dominio, product_id, product_name):
     """Genera la URL completa del producto"""
-    # Asegurar que el dominio no termine con /
     dominio = dominio.rstrip('/')
-    
-    # Crear el slug del nombre del producto
     slug = crear_slug(product_name)
     
-    # Si el slug está vacío, usar solo el ID
     if not slug:
         slug = f"producto-{product_id}"
     
-    # Construir la URL
     product_url = f"{dominio}/productos/{product_id}/{slug}"
-    
     return product_url
 
 def limpiar_html(raw_html):
@@ -88,7 +75,7 @@ def limpiar_html(raw_html):
         return ""
     cleanr = re.compile('<.*?>')
     texto = re.sub(cleanr, '', raw_html)
-    # Reemplazar entidades HTML comunes
+    
     replacements = {
         '&nbsp;': ' ',
         '&aacute;': 'á',
@@ -115,13 +102,12 @@ def limpiar_html(raw_html):
     return texto.strip()
 
 def obtener_embedding(texto):
-    """Genera embedding usando OpenAI (modelo más barato)"""
+    """Genera embedding usando OpenAI"""
     try:
-        # Limitar longitud para ahorrar tokens
         texto_truncado = texto[:6000]
         
         response = client.embeddings.create(
-            model="text-embedding-3-small",  # $0.02 por 1M tokens
+            model="text-embedding-3-small",
             input=texto_truncado
         )
         return response.data[0].embedding
@@ -130,23 +116,20 @@ def obtener_embedding(texto):
         return None
 
 def crear_texto_para_embedding(producto):
-    """Crea un texto optimizado y conciso para búsqueda semántica"""
+    """Crea un texto optimizado para búsqueda semántica"""
     desc_limpia = limpiar_html(producto.get('description', ''))
     
-    # Información básica
     nombre = producto.get('name', 'Sin nombre')
     sku = producto.get('sku', 'N/A')
     precio = producto.get('price', 0)
     moneda = producto.get('currency', 'ARS')
     stock_total = producto.get('stock', 0)
     
-    # Categorías
     categorias = [cat['name'] for cat in producto.get('categories', [])]
     cats_texto = ', '.join(set(categorias)) if categorias else 'Sin categoría'
     
-    # Variantes (solo si existen y son relevantes)
     variantes_info = []
-    for var in producto.get('variants', [])[:5]:  # Máximo 5 variantes
+    for var in producto.get('variants', [])[:5]:
         attrs = var.get('attributes', [])
         color = next((a['value'] for a in attrs if a['name'] == 'Color'), None)
         stock_var = var.get('stock', 0)
@@ -155,7 +138,6 @@ def crear_texto_para_embedding(producto):
         if color:
             variantes_info.append(f"{color} ({stock_var} unid, ${precio_var})")
     
-    # Construir texto optimizado
     texto_partes = [
         f"Producto: {nombre}",
         f"SKU: {sku}",
@@ -164,7 +146,7 @@ def crear_texto_para_embedding(producto):
     ]
     
     if desc_limpia:
-        texto_partes.append(f"Descripción: {desc_limpia[:300]}")  # Limitar descripción
+        texto_partes.append(f"Descripción: {desc_limpia[:300]}")
     
     if categorias:
         texto_partes.append(f"Categorías: {cats_texto}")
@@ -172,7 +154,6 @@ def crear_texto_para_embedding(producto):
     if variantes_info:
         texto_partes.append(f"Variantes: {', '.join(variantes_info)}")
     
-    # Info adicional
     min_qty = producto.get('minimum_recommended_quantity')
     if min_qty:
         texto_partes.append(f"Cantidad mínima: {min_qty}")
@@ -196,7 +177,6 @@ def crear_texto_para_embedding(producto):
 def crear_answer_legible(producto, product_url):
     """Crea un texto legible y estructurado para el campo answer"""
     
-    # Información básica
     answer_partes = [
         f"📦 INFORMACIÓN DEL PRODUCTO",
         f"",
@@ -205,7 +185,6 @@ def crear_answer_legible(producto, product_url):
         f"ID Producto: {producto.get('id')}",
     ]
     
-    # Agregar URL del producto si existe
     if product_url:
         answer_partes.extend([
             f"",
@@ -220,7 +199,6 @@ def crear_answer_legible(producto, product_url):
         f"Stock Total: {producto.get('stock', 0)} unidades",
     ])
     
-    # Descripción
     desc = limpiar_html(producto.get('description', ''))
     if desc:
         answer_partes.extend([
@@ -229,7 +207,6 @@ def crear_answer_legible(producto, product_url):
             desc
         ])
     
-    # Categorías
     categorias = producto.get('categories', [])
     if categorias:
         cats = ', '.join(set([cat['name'] for cat in categorias]))
@@ -239,7 +216,6 @@ def crear_answer_legible(producto, product_url):
             cats
         ])
     
-    # Variantes
     variantes = producto.get('variants', [])
     if variantes:
         answer_partes.extend([
@@ -253,7 +229,6 @@ def crear_answer_legible(producto, product_url):
                 f"  {i}. {color} - Stock: {var.get('stock', 0)} unid - Precio: ${var.get('price', 0)}"
             )
     
-    # Info adicional
     min_qty = producto.get('minimum_recommended_quantity')
     prod_days = producto.get('production_days')
     peso = producto.get('weight')
@@ -272,7 +247,6 @@ def crear_answer_legible(producto, product_url):
                 f"Dimensiones: {dims.get('length', 0)} x {dims.get('width', 0)} x {dims.get('height', 0)} cm"
             )
     
-    # Imágenes
     image_principal = producto.get('image')
     gallery = producto.get('gallery', [])
     
@@ -295,19 +269,14 @@ def upsert_producto(cursor, producto, store_id, assistant_id, account_id, domini
     product_name = producto.get('name', 'Sin nombre')
     
     try:
-        # Crear el contenido para embedding
         texto_embedding = crear_texto_para_embedding(producto)
         
-        # Generar embedding
         vector = obtener_embedding(texto_embedding)
         if not vector:
             print(f"  ❌ Fallo en embedding para: {product_name[:40]}")
             return False
         
-        # Generar la URL del producto
         product_url = generar_product_url(dominio, product_id, product_name)
-        
-        # Crear answer con la URL incluida
         answer_legible = crear_answer_legible(producto, product_url)
         question = f"{producto.get('sku', '')} - {producto.get('id')} - {producto.get('name', '')}"
 
@@ -360,14 +329,12 @@ def sincronizar():
     cursor = None
     
     try:
-        # Obtener lista de tiendas
         print(f"📡 Consultando tiendas desde: {STORES_URL}")
         response = requests.get(STORES_URL, timeout=30)
         response.raise_for_status()
         tiendas = response.json()
         print(f"✅ Tiendas encontradas: {len(tiendas)}\n")
         
-        # Conectar a la base de datos
         print(f"🔌 Conectando a base de datos: {DB_PARAMS['host']}")
         conn = psycopg2.connect(**DB_PARAMS)
         cursor = conn.cursor()
@@ -378,14 +345,12 @@ def sincronizar():
         total_fallidos = 0
         tiendas_sin_config = 0
         
-        # Procesar cada tienda
         for idx_tienda, tienda in enumerate(tiendas, 1):
             store_id = tienda['id_store']
             store_name = tienda['name']
             products_url = tienda['productos_json_url']
             dominio = tienda.get('dominio', '')
             
-            # Obtener assistant_id y account_id desde el JSON de la API
             assistant_id = tienda.get('assistant_id')
             account_id = tienda.get('account_id')
             
@@ -396,17 +361,15 @@ def sincronizar():
             print(f"📊 Account ID: {account_id if account_id else '❌ NO CONFIGURADO'}")
             print("=" * 70)
             
-            # Validar que tenga assistant_id y account_id configurados
             if not assistant_id or not account_id:
                 print(f"⚠️  OMITIDA: La tienda no tiene assistant_id o account_id configurado\n")
                 tiendas_sin_config += 1
                 continue
             
-            # Validar que tenga dominio configurado
             if not dominio:
                 print(f"⚠️  ADVERTENCIA: La tienda no tiene dominio configurado, se omitirá product_url\n")
             
-            # Verificar y actualizar feature_flags si es necesario
+            # Verificar y actualizar feature_flags
             if account_id and account_id > 0:
                 try:
                     cursor.execute(
@@ -432,24 +395,38 @@ def sincronizar():
                         print(f"⚠️  Account ID {account_id} no encontrado en la base de datos")
                 except Exception as e:
                     print(f"❌ Error verificando/actualizando feature_flags: {e}")
-                    # Continuar con el procesamiento aunque falle esta parte
             
             try:
-                # Obtener productos de la tienda
-                print(f"📡 Consultando productos...")
+                # PRIMERO: Consultar qué productos hay ANTES en la BD
+                print(f"\n📋 Consultando productos ACTUALES en BD...")
+                cursor.execute(
+                    "SELECT product_id FROM captain_assistant_responses WHERE store_id = %s AND account_id = %s",
+                    (str(store_id), account_id)
+                )
+                productos_bd_antes = cursor.fetchall()
+                ids_productos_bd_antes = set(row[0] for row in productos_bd_antes)
+                print(f"📊 Productos en BD ANTES de sincronizar: {len(ids_productos_bd_antes)}")
+                
+                # SEGUNDO: Obtener productos del JSON (fuente de verdad)
+                print(f"\n📡 Consultando productos del JSON...")
                 prod_response = requests.get(products_url, timeout=30)
                 prod_response.raise_for_status()
                 productos = prod_response.json()
-                print(f"✅ Productos encontrados: {len(productos)}\n")
+                print(f"✅ Productos encontrados en JSON: {len(productos)}\n")
                 
                 exitosos_tienda = 0
                 fallidos_tienda = 0
                 
-                # Crear lista de IDs de productos actuales en el JSON (fuente de verdad)
+                # TERCERO: Crear lista de IDs del JSON (FUENTE DE VERDAD)
                 ids_productos_json = set(str(producto['id']) for producto in productos)
-                print(f"📊 Productos en JSON actual: {len(ids_productos_json)}")
+                print(f"📊 IDs únicos en JSON: {len(ids_productos_json)}")
                 
-                # Procesar cada producto (INSERT/UPDATE)
+                # Debug: Mostrar algunos IDs del JSON
+                if ids_productos_json:
+                    ejemplos_json = list(ids_productos_json)[:5]
+                    print(f"    Ejemplos de IDs en JSON: {ejemplos_json}")
+                
+                # CUARTO: Procesar cada producto (INSERT/UPDATE)
                 print(f"\n🔄 Procesando productos del JSON...\n")
                 for idx_prod, producto in enumerate(productos, 1):
                     print(f"[{idx_prod}/{len(productos)}]", end=" ")
@@ -467,36 +444,40 @@ def sincronizar():
                         conn.commit()
                         print(f"  💾 Guardado intermedio ({idx_prod}/{len(productos)})")
                 
-                # Commit final de inserts/updates
+                # QUINTO: Commit FINAL de todos los inserts/updates
                 conn.commit()
-                
                 print(f"\n✅ Procesamiento completado: {exitosos_tienda} exitosos, {fallidos_tienda} fallidos")
                 
-                # AHORA SÍ: Consultar qué productos hay en la BD DESPUÉS de procesar
-                print(f"\n📋 Consultando productos actuales en BD...")
+                # SEXTO: AHORA SÍ consultar la BD DESPUÉS del commit
+                print(f"\n📋 Consultando productos en BD DESPUÉS del commit...")
                 cursor.execute(
                     "SELECT product_id FROM captain_assistant_responses WHERE store_id = %s AND account_id = %s",
                     (str(store_id), account_id)
                 )
-                productos_bd = cursor.fetchall()
-                ids_productos_bd = set(row[0] for row in productos_bd)
-                print(f"📊 Productos actuales en BD: {len(ids_productos_bd)}")
+                productos_bd_despues = cursor.fetchall()
+                ids_productos_bd_despues = set(row[0] for row in productos_bd_despues)
+                print(f"📊 Productos en BD DESPUÉS de sincronizar: {len(ids_productos_bd_despues)}")
                 
-                # Calcular qué productos hay en BD pero NO están en el JSON (productos obsoletos)
-                ids_a_eliminar = ids_productos_bd - ids_productos_json
-                print(f"🗑️  Productos obsoletos a eliminar: {len(ids_a_eliminar)}")
+                # Debug: Mostrar algunos IDs de la BD
+                if ids_productos_bd_despues:
+                    ejemplos_bd = list(ids_productos_bd_despues)[:5]
+                    print(f"    Ejemplos de IDs en BD: {ejemplos_bd}")
+                
+                # SÉPTIMO: Calcular diferencia (productos en BD que NO están en JSON)
+                ids_a_eliminar = ids_productos_bd_despues - ids_productos_json
+                print(f"\n🗑️  Productos obsoletos a eliminar: {len(ids_a_eliminar)}")
                 
                 if ids_a_eliminar and len(ids_a_eliminar) <= 10:
                     print(f"    IDs a eliminar: {list(ids_a_eliminar)}")
                 elif ids_a_eliminar:
                     print(f"    Ejemplos: {list(ids_a_eliminar)[:10]}")
                 
-                # Eliminar productos obsoletos (los que NO están en el JSON)
+                # OCTAVO: Eliminar productos obsoletos
                 if ids_a_eliminar:
                     print(f"\n🗑️  Iniciando eliminación de productos obsoletos...")
                     
-                    # Verificación de seguridad: si va a eliminar más del 80%, cancelar
-                    porcentaje_eliminacion = (len(ids_a_eliminar) / len(ids_productos_bd) * 100) if ids_productos_bd else 0
+                    # Verificación de seguridad
+                    porcentaje_eliminacion = (len(ids_a_eliminar) / len(ids_productos_bd_despues) * 100) if ids_productos_bd_despues else 0
                     
                     if porcentaje_eliminacion > 80:
                         print(f"⚠️⚠️⚠️  ADVERTENCIA: Se va a eliminar {porcentaje_eliminacion:.1f}% de los productos")
@@ -523,7 +504,7 @@ def sincronizar():
                             total_final = cursor.fetchone()[0]
                             print(f"📊 Total final en BD para esta tienda: {total_final} productos")
                             
-                            # Validación: el total final debe ser igual a los del JSON
+                            # Validación
                             if total_final != len(ids_productos_json):
                                 print(f"⚠️⚠️⚠️  ADVERTENCIA: Discrepancia detectada!")
                                 print(f"    Esperado: {len(ids_productos_json)} productos")
@@ -538,15 +519,20 @@ def sincronizar():
                 else:
                     print(f"\n✓ No hay productos obsoletos para eliminar")
                     
-                    # Verificar estado final de todos modos
+                    # Verificar estado final
                     cursor.execute(
                         "SELECT COUNT(*) FROM captain_assistant_responses WHERE store_id = %s AND account_id = %s",
                         (str(store_id), account_id)
                     )
                     total_final = cursor.fetchone()[0]
                     print(f"📊 Total en BD para esta tienda: {total_final} productos")
+                    
+                    # Validación
+                    if total_final != len(ids_productos_json):
+                        print(f"⚠️  ADVERTENCIA MENOR: Diferencia de {abs(total_final - len(ids_productos_json))} productos")
+                        print(f"    JSON: {len(ids_productos_json)} | BD: {total_final}")
                 
-                print()  # Línea en blanco
+                print()
                 
             except requests.exceptions.RequestException as e:
                 print(f"❌ Error de conexión con tienda {store_name}: {e}\n")
@@ -583,7 +569,6 @@ def sincronizar():
         print(f"\n❌ ERROR FATAL: {e}\n")
         raise
     finally:
-        # Cerrar conexiones
         if cursor:
             cursor.close()
         if conn:
@@ -611,7 +596,7 @@ if __name__ == "__main__":
             print(f"💤 Próxima sincronización: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(proxima_ejecucion))}")
             print(f"{'─' * 70}\n")
             
-            time.sleep(21600)  # 6 horas
+            time.sleep(21600)
             
         except KeyboardInterrupt:
             print("\n\n🛑 SERVICIO DETENIDO POR EL USUARIO\n")
@@ -619,4 +604,4 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"\n❌ ERROR EN CICLO #{ciclo}: {e}")
             print("⏰ Reintentando en 5 minutos...\n")
-            time.sleep(300)  # 5 minutos
+            time.sleep(300)
