@@ -5,12 +5,6 @@ import time
 import requests
 import psycopg2
 from openai import OpenAI
-# from dotenv import load_dotenv
-
-# Cargar variables de entorno
-# load_dotenv()
-
-
 
 # Configuración
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -404,7 +398,8 @@ def sincronizar():
                     (str(store_id), account_id)
                 )
                 productos_bd_antes = cursor.fetchall()
-                ids_productos_bd_antes = set(row[0] for row in productos_bd_antes)
+                # CRÍTICO: Convertir TODO a string para comparación consistente
+                ids_productos_bd_antes = set(str(row[0]) for row in productos_bd_antes)
                 print(f"📊 Productos en BD ANTES de sincronizar: {len(ids_productos_bd_antes)}")
                 
                 # SEGUNDO: Obtener productos del JSON (fuente de verdad)
@@ -425,6 +420,7 @@ def sincronizar():
                 if ids_productos_json:
                     ejemplos_json = list(ids_productos_json)[:5]
                     print(f"    Ejemplos de IDs en JSON: {ejemplos_json}")
+                    print(f"    Tipo de datos: {type(ejemplos_json[0]).__name__}")
                 
                 # CUARTO: Procesar cada producto (INSERT/UPDATE)
                 print(f"\n🔄 Procesando productos del JSON...\n")
@@ -455,13 +451,24 @@ def sincronizar():
                     (str(store_id), account_id)
                 )
                 productos_bd_despues = cursor.fetchall()
-                ids_productos_bd_despues = set(row[0] for row in productos_bd_despues)
+                # CRÍTICO: Convertir TODO a string para comparación consistente
+                ids_productos_bd_despues = set(str(row[0]) for row in productos_bd_despues)
                 print(f"📊 Productos en BD DESPUÉS de sincronizar: {len(ids_productos_bd_despues)}")
                 
                 # Debug: Mostrar algunos IDs de la BD
                 if ids_productos_bd_despues:
                     ejemplos_bd = list(ids_productos_bd_despues)[:5]
                     print(f"    Ejemplos de IDs en BD: {ejemplos_bd}")
+                    print(f"    Tipo de datos: {type(ejemplos_bd[0]).__name__}")
+                
+                # Verificar intersección para confirmar que la comparación funciona
+                interseccion_test = ids_productos_json & ids_productos_bd_despues
+                print(f"\n🔍 Verificación de comparación:")
+                print(f"    IDs en común (deberían ser la mayoría): {len(interseccion_test)}")
+                if len(interseccion_test) > 0:
+                    print(f"    ✅ La comparación funciona correctamente")
+                else:
+                    print(f"    ❌ PROBLEMA: No hay IDs en común - revisar tipos de datos")
                 
                 # SÉPTIMO: Calcular diferencia (productos en BD que NO están en JSON)
                 ids_a_eliminar = ids_productos_bd_despues - ids_productos_json
